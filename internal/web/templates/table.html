@@ -95,7 +95,7 @@
         let startDate = 1
 
         function formatCurrency(amount) {
-            let formattedAmount = new Intl.NumberFormat('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(amount);
+            let formattedAmount = new Intl.NumberFormat('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(amount);
             // Currencies commonly used after the amount
             const postfixCurrencies = new Set(['kr', 'kr.', 'Fr', 'zł']);
             if (postfixCurrencies.has(currencySymbol)) {
@@ -105,7 +105,7 @@
         }
 
         function formatMonth(date) {
-            return date.toLocaleDateString('en-US', { 
+            return date.toLocaleDateString('en-IN', { 
                 year: 'numeric',
                 month: 'long',
                 timeZone: getUserTimeZone()
@@ -125,7 +125,7 @@
         }
         function formatDateFromUTC(utcDateString) {
             const date = new Date(utcDateString);
-            return date.toLocaleDateString('en-US', {
+            return date.toLocaleDateString('en-IN', {
                 month: 'short',
                 day: 'numeric',
                 year: 'numeric',
