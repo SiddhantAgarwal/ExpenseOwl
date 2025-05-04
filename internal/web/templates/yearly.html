@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/fa.min.css">
+    <meta name="theme-color" content="#1a1a1a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/pwa/icon-192.png">
+    <link rel="stylesheet" href="/style.css">
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js');
+            });
+        }
+    </script>
+    <title>ExpenseOwl Dashboard</title>
+    <script src="/chart.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <!-- <h1 align="center"><img src="/pwa/icon-512.png" alt="ExpenseOwl Logo" height="75" style="vertical-align: middle; margin-right: 10px;">ExpenseOwl</h1> -->
+            <div class="nav-bar">
+                <a href="/">
+                    <img src="/pwa/icon-512.png" alt="ExpenseOwl Logo" height="85" style="vertical-align: middle; margin-right: 20px;">
+                </a>
+                <a href="/" class="view-button" data-tooltip="Dashboard">
+                    <i class="fa-solid fa-chart-pie"></i>
+                </a>
+                <a href="/table" class="view-button" data-tooltip="Table View">
+                    <i class="fa-solid fa-table"></i>
+                </a>
+                <a href="/yearly" class="view-button active" data-tooltip="Yearly">
+                    <i class="fa-solid fa-calendar"></i>
+                </a>
+                <a href="/settings" class="view-button" data-tooltip="Settings">
+                    <i class="fa-solid fa-gear"></i>
+                </a>
+            </div>
+        </header>
+
+        <div class="month-navigation">
+            <button id="prevYear" class="nav-button"><i class="fa-solid fa-arrow-left"></i></button>
+            <div class="current-month" id="currentYear"></div>
+            <button id="nextYear" class="nav-button"><i class="fa-solid fa-arrow-right"></i></button>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-box">
+                <canvas id="yearlyExpenseBarChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <script>
+        let barChart;
+        let currentYear;
+
+        function formatCurrency(amount) {
+            let formattedAmount = new Intl.NumberFormat('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(amount);
+            // Currencies commonly used after the amount
+            const postfixCurrencies = new Set(['kr', 'kr.', 'Fr', 'zł']);
+            if (postfixCurrencies.has(currencySymbol)) {
+                return `${formattedAmount} ${currencySymbol}`;
+            }
+            return `${currencySymbol} ${formattedAmount}`;
+        }
+
+        async function initialize() {
+            try {
+                currentYear = new Date().getFullYear();
+                const response = await fetch(`/expenses/yearly/${currentYear}`);
+                if (!response.ok) throw new Error('Failed to fetch data');
+                monthlyExpenses = await response.json();
+
+                const catReponse = await fetch('/categories');
+                if (!catReponse.ok) throw new Error('Failed to fetch data');
+                categories = await catReponse.json();
+
+                createBarChart(monthlyExpenses, categories.categories);
+                document.getElementById('currentYear').textContent = currentYear;
+            } catch (error) {
+                console.error('Failed to initialize dashboard:', error);
+            }
+        }
+
+        function createBarChart(monthlyExpenses, categories) {
+            if (barChart) barChart.destroy();
+            barChart = new Chart('yearlyExpenseBarChart', {
+                type: 'bar',
+                data: {
+                    labels: generateMonths(),
+                    datasets: categories.map(value => {
+                        return {
+                            label: value,
+                            data: monthlyExpenses[value],
+                            backgroundColor: generateRandomPastelColor(),
+                            borderColor: '#1a1a1a',
+                            borderWidth: 1
+                        }
+                    })
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            stacked: true,
+                        },
+                        y: {
+                            stacked: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function generateRandomPastelColor() {
+            // Generate base random RGB values (0-255)
+            const r = Math.floor(Math.random() * 256);
+            const g = Math.floor(Math.random() * 256);
+            const b = Math.floor(Math.random() * 256);
+            
+            // Mix with white to create pastel effect
+            // Pastel formula: mix original color with white (255,255,255)
+            // Higher mixFactor = more pastel (closer to white)
+            const mixFactor = 0.5; // Adjust this value between 0.5-0.8 for different pastel intensities
+            
+            const pastelR = Math.floor(r + (255 - r) * mixFactor);
+            const pastelG = Math.floor(g + (255 - g) * mixFactor);
+            const pastelB = Math.floor(b + (255 - b) * mixFactor);
+            
+            // Convert to hex and ensure 2 digits each
+            const hexR = pastelR.toString(16).padStart(2, '0');
+            const hexG = pastelG.toString(16).padStart(2, '0');
+            const hexB = pastelB.toString(16).padStart(2, '0');
+            
+            return `#${hexR}${hexG}${hexB}`;
+        }
+
+        function generateMonths(abbreviated = false) {
+            // Create a date object to work with
+            const date = new Date();
+            // Array to store month names
+            const months = [];
+            
+            // Set the date to the first day of each month and extract the month name
+            for (let month = 0; month < 12; month++) {
+                date.setMonth(month);
+                
+                // Get month name using the Intl.DateTimeFormat API for better internationalization
+                const monthName = date.toLocaleString('en-US', { 
+                month: abbreviated ? 'short' : 'long' 
+                });
+                
+                months.push(monthName);
+            }
+            
+            return months;
+        }
+
+        async function refreshChart(year) {
+            const response = await fetch(`/expenses/yearly/${year}`);
+            if (!response.ok) throw new Error('Failed to fetch data');
+            monthlyExpenses = await response.json();
+
+            const catReponse = await fetch('/categories');
+            if (!catReponse.ok) throw new Error('Failed to fetch data');
+            categories = await catReponse.json();
+
+            createBarChart(monthlyExpenses, categories.categories);
+        }
+
+        document.getElementById('prevYear').addEventListener('click', async () => {
+            try {
+                currentDate = new Date(currentYear, 0);
+                currentDate.setFullYear(currentDate.getFullYear() - 1);
+                
+                const year = currentDate.getFullYear();
+               
+                await refreshChart(year);
+
+                document.getElementById('currentYear').textContent = year;
+                currentYear = year;
+            } catch (error) {
+                console.error('Failed to change year:', error);
+            }
+        });
+        document.getElementById('nextYear').addEventListener('click', async () => {
+            try {
+                currentDate = new Date(currentYear, 0);
+                currentDate.setFullYear(currentDate.getFullYear() + 1);
+                
+                const year = currentDate.getFullYear();
+                
+                await refreshChart(year);
+
+                document.getElementById('currentYear').textContent = year;
+                currentYear = year;
+            } catch (error) {
+                console.error('Failed to change year:', error);
+            }
+        });
+        document.addEventListener('DOMContentLoaded', initialize);
+    </script>
+</body>
