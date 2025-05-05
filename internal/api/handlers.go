@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/tanq16/expenseowl/internal/config"
@@ -200,6 +202,43 @@ func (h *Handler) GetExpenses(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, expenses)
 }
 
+func (h *Handler) GetExpensesYearly(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		log.Println("HTTP ERROR: Method not allowed")
+		return
+	}
+
+	year, err := strconv.Atoi(r.PathValue("year"))
+	if err != nil {
+		http.Error(w, "year parsing failed", http.StatusBadRequest)
+		return
+	}
+
+	expenses, err := h.storage.GetAllExpenses()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve expenses"})
+		log.Printf("HTTP ERROR: Failed to retrieve expenses: %v\n", err)
+		return
+	}
+
+	yearlyMap := make(map[string][]float64)
+	for _, cat := range h.config.Categories {
+		yearlyMap[cat] = make([]float64, 12)
+	}
+
+	for _, expense := range expenses {
+		if expense.Date.Year() != year {
+			continue
+		}
+		if strings.ToLower(expense.Category) == "income" {
+			continue
+		}
+		yearlyMap[expense.Category][int(expense.Date.Month())-1] += expense.Amount
+	}
+	writeJSON(w, http.StatusOK, yearlyMap)
+}
+
 func (h *Handler) ServeTableView(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -208,6 +247,20 @@ func (h *Handler) ServeTableView(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html")
 	if err := web.ServeTemplate(w, "table.html"); err != nil {
+		http.Error(w, "Failed to serve template", http.StatusInternalServerError)
+		log.Printf("HTTP ERROR: Failed to serve template: %v\n", err)
+		return
+	}
+}
+
+func (h *Handler) ServeYearlyView(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		log.Println("HTTP ERROR: Method not allowed")
+		return
+	}
+	w.Header().Set("Content-Type", "text/html")
+	if err := web.ServeTemplate(w, "yearly.html"); err != nil {
 		http.Error(w, "Failed to serve template", http.StatusInternalServerError)
 		log.Printf("HTTP ERROR: Failed to serve template: %v\n", err)
 		return
